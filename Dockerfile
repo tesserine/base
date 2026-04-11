@@ -18,7 +18,7 @@ FROM cgr.dev/chainguard/wolfi-base AS runa-builder
 
 RUN apk add --no-cache rust cargo git
 
-ARG RUNA_REF=main
+ARG RUNA_REF=v0.1.0
 RUN git clone --depth 1 --branch "${RUNA_REF}" \
         https://github.com/tesserine/runa.git /build/runa \
     && cd /build/runa \
