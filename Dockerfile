@@ -8,7 +8,8 @@
 #   chown      — home directory ownership (from coreutils)
 #
 # Ships with:
-#   runa       — cognitive runtime (built from source)
+#   runa       — cognitive runtime CLI (built from source)
+#   runa-mcp   — MCP server for agent communication (built from source)
 #   claude     — Claude Code CLI (Anthropic native installer)
 
 # ---------------------------------------------------------------------------
@@ -29,7 +30,8 @@ RUN git clone --depth 1 --branch "${RUNA_REF}" \
         https://github.com/tesserine/runa.git /build/runa \
     && cd /build/runa \
     && cargo build --release \
-    && cp target/release/runa /build/runa-bin
+    && cp target/release/runa /build/runa-bin \
+    && cp target/release/runa-mcp /build/runa-mcp-bin
 
 # ---------------------------------------------------------------------------
 # Stage 2: Final image
@@ -56,8 +58,9 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
     && cp -L /root/.local/bin/claude /usr/local/bin/claude \
     && rm -rf /root/.local/share/claude /root/.local/bin/claude /root/.cache/claude
 
-# runa binary from builder stage
+# runa CLI and MCP server from builder stage
 COPY --from=runa-builder /build/runa-bin /usr/local/bin/runa
+COPY --from=runa-builder /build/runa-mcp-bin /usr/local/bin/runa-mcp
 
 # The runner enters via /bin/sh -lc with a generated script that creates
 # the unprivileged user, clones the repo, and exec gosu's into the session
