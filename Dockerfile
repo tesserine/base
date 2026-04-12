@@ -45,6 +45,9 @@ RUN apk add --no-cache \
         gosu \
         shadow
 
+# Wolfi minimal image does not include /usr/local/bin
+RUN mkdir -p /usr/local/bin
+
 # Claude Code — native installer (no Node.js required on glibc)
 # The installer symlinks ~/.local/bin/claude -> ~/.local/share/claude/versions/<ver>.
 # Copy the resolved binary (not the symlink) to a system-wide path so the
