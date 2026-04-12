@@ -46,7 +46,11 @@ RUN apk add --no-cache \
         shadow
 
 # Claude Code — native installer (no Node.js required on glibc)
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# The installer places the binary at /root/.local/bin/claude which is
+# inaccessible to the unprivileged agent user after gosu. Move it to a
+# system-wide path so the agent session command can resolve it.
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && mv /root/.local/bin/claude /usr/local/bin/claude
 
 # runa binary from builder stage
 COPY --from=runa-builder /build/runa-bin /usr/local/bin/runa
