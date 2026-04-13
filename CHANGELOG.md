@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-04-13
+
 Reference container image for agentd agent sessions. Wolfi-based, multi-stage
 build that satisfies the agentd runner contract and ships runa + Claude Code.
+Validated in the first live integration test (April 12, 2026).
 
 ### Added
 
