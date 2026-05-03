@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- README agentd configuration example now uses the current `[[agents]]` schema
+  with structured command argv.
+
 ## [0.1.0] — 2026-04-13
 
 Reference container image for agentd agent sessions. Wolfi-based, multi-stage
