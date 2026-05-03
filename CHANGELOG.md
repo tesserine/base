@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - README agentd configuration example now uses the current `[[agents]]` schema
   with structured command argv.
+- runa builder stage now uses Wolfi's packaged Rust toolchain instead of
+  installing a floating rustup stable toolchain during image builds.
 
 ## [0.1.0] — 2026-04-13
 

@@ -17,13 +17,12 @@
 # ---------------------------------------------------------------------------
 FROM cgr.dev/chainguard/wolfi-base AS runa-builder
 
-RUN apk add --no-cache curl gcc git glibc-dev
-
-# Install Rust via rustup (Wolfi does not package cargo, and we need >= 1.85
-# for edition 2024)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-        sh -s -- -y --default-toolchain stable --profile minimal
-ENV PATH="/root/.cargo/bin:${PATH}"
+RUN apk add --no-cache \
+        curl \
+        gcc \
+        git \
+        glibc-dev \
+        rust-1.89
 
 ARG RUNA_REF=v0.1.0
 RUN git clone --depth 1 --branch "${RUNA_REF}" \
