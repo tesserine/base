@@ -22,7 +22,7 @@ graphs.
 
 **Agent runtime:** [Claude Code](https://claude.ai/code) via the native
 installer. Authenticate headlessly by injecting `ANTHROPIC_API_KEY` as a
-credential in your agentd profile configuration.
+credential in your agentd agent configuration.
 
 ## Building
 
@@ -38,31 +38,19 @@ podman build --build-arg RUNA_REF=v0.1.0 -t tesserine/base .
 
 ## Using with agentd
 
-Reference this image in your profile configuration:
+Reference this image in your agent configuration:
 
 ```toml
-[[profiles]]
+[[agents]]
 name = "site-builder"
 base_image = "localhost/tesserine/base"
 methodology_dir = "../groundwork"
 repo = "https://github.com/your-org/your-project.git"
-command = [
-  "/bin/sh",
-  "-lc",
-  '''
-runa init --methodology /agentd/methodology/manifest.toml
-cat > .runa/config.toml <<'EOF'
-[agent]
-command = ["claude", "-p", "--dangerously-skip-permissions"]
-EOF
-if [ -n "${AGENTD_WORK_UNIT:-}" ]; then
-  exec runa run --work-unit "${AGENTD_WORK_UNIT}"
-fi
-exec runa run
-''',
-]
 
-[[profiles.credentials]]
+[agents.command]
+argv = ["claude", "-p", "--dangerously-skip-permissions"]
+
+[[agents.credentials]]
 name = "ANTHROPIC_API_KEY"
 source = "AGENTD_ANTHROPIC_KEY"
 ```
