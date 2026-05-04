@@ -20,9 +20,9 @@ owns the entrypoint.
 source. Loads methodology manifests, validates artifacts, enforces dependency
 graphs.
 
-**Agent runtime:** [Claude Code](https://claude.ai/code) via the native
-installer. Authenticate headlessly by injecting `ANTHROPIC_API_KEY` as a
-credential in your agentd agent configuration.
+**Agent runtime:** [Claude Code](https://claude.ai/code), pinned to a verified
+Anthropic release binary. Authenticate headlessly by injecting
+`ANTHROPIC_API_KEY` as a credential in your agentd agent configuration.
 
 ## Building
 
@@ -35,6 +35,10 @@ To pin runa to a specific version or tag:
 ```bash
 podman build --build-arg RUNA_REF=v0.1.0 -t tesserine/base .
 ```
+
+Claude Code is intentionally pinned in the Dockerfile. Version bumps are manual
+build-substrate changes so the release manifest signature, binary checksum,
+image build, and runtime contract can be verified together.
 
 ## Using with agentd
 
@@ -67,9 +71,9 @@ agentd daemon --config /etc/agentd/agentd.toml
 
 Fork this repo and modify the Dockerfile. Common customizations:
 
-- **Different agent runtime:** Replace the Claude Code installer with Codex
-  (`npm i -g @openai/codex`), or any CLI that can receive prompts and produce
-  file changes.
+- **Different agent runtime:** Replace the Claude Code release binary with
+  Codex (`npm i -g @openai/codex`), or any CLI that can receive prompts and
+  produce file changes.
 - **Additional tools:** Add language runtimes, linters, or build tools your
   agents need.
 - **Different methodology:** The methodology is mounted read-only by agentd at
