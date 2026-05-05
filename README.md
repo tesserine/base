@@ -26,19 +26,37 @@ Anthropic release binary. Authenticate headlessly by injecting
 
 ## Building
 
+Deployment builds must pin source material to immutable refs: tags or full
+commit SHAs. Do not build deployment images from `main`; mutable branch refs
+can reuse stale container build layers while the remote branch has moved.
+The shared release-candidate convention is defined in
+[commons RELEASE.md](https://github.com/tesserine/commons/blob/main/RELEASE.md).
+
 ```bash
-podman build -t tesserine/base .
+podman build \
+  --build-arg BASE_REF=v0.1.2-rc.1 \
+  --build-arg RUNA_REF=v0.1.2-rc.1 \
+  -t tesserine/base:v0.1.2-rc.1 .
 ```
 
-To pin runa to a specific version or tag:
+For local development, the defaults are usable, but they intentionally label
+the base image ref as `local`:
 
 ```bash
-podman build --build-arg RUNA_REF=v0.1.0 -t tesserine/base .
+podman build -t tesserine/base:local .
+```
+
+Inspect the image labels to confirm what was built:
+
+```bash
+podman inspect tesserine/base:v0.1.2-rc.1 | jq '.[0].Config.Labels'
 ```
 
 Claude Code is intentionally pinned in the Dockerfile. Version bumps are manual
 build-substrate changes so the release manifest signature, binary checksum,
-image build, and runtime contract can be verified together.
+image build, and runtime contract can be verified together. The built image
+exposes `org.tesserine.base.ref`, `org.tesserine.runa.ref`, and
+`org.tesserine.claude-code.version` labels for deployment inspection.
 
 ## Using with agentd
 
