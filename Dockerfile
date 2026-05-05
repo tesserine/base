@@ -24,7 +24,7 @@ RUN apk add --no-cache \
         glibc-dev \
         rust-1.89
 
-ARG RUNA_REF=v0.1.0
+ARG RUNA_REF=v0.1.2-rc.1
 RUN git clone --depth 1 --branch "${RUNA_REF}" \
         https://github.com/tesserine/runa.git /build/runa \
     && cd /build/runa \
@@ -53,7 +53,8 @@ RUN attempt=1; \
         sleep 5; \
     done
 
-ENV CLAUDE_CODE_VERSION=2.1.126
+ARG CLAUDE_CODE_VERSION=2.1.126
+ENV CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION}
 ENV CLAUDE_CODE_RELEASE_KEY_FINGERPRINT=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
 
 RUN timeout 900 sh -euxc '\
@@ -101,6 +102,10 @@ RUN timeout 900 sh -euxc '\
 # ---------------------------------------------------------------------------
 FROM cgr.dev/chainguard/wolfi-base
 
+ARG BASE_REF=local
+ARG RUNA_REF=v0.1.2-rc.1
+ARG CLAUDE_CODE_VERSION=2.1.126
+
 # agentd runner contract
 RUN apk add --no-cache \
         bash \
@@ -120,6 +125,14 @@ COPY --from=claude-downloader /usr/local/bin/claude /usr/local/bin/claude
 # runa CLI and MCP server from builder stage
 COPY --from=runa-builder /build/runa-bin /usr/local/bin/runa
 COPY --from=runa-builder /build/runa-mcp-bin /usr/local/bin/runa-mcp
+
+LABEL org.opencontainers.image.title="tesserine/base" \
+      org.opencontainers.image.description="Reference container image for agentd agent sessions" \
+      org.opencontainers.image.source="https://github.com/tesserine/base" \
+      org.opencontainers.image.revision="${BASE_REF}" \
+      org.tesserine.base.ref="${BASE_REF}" \
+      org.tesserine.runa.ref="${RUNA_REF}" \
+      org.tesserine.claude-code.version="${CLAUDE_CODE_VERSION}"
 
 # The runner enters via /bin/sh -lc with a generated script that creates
 # the unprivileged user, clones the repo, and exec gosu's into the session

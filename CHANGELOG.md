@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Image builds now expose OCI and Tesserine labels for the base ref, runa ref,
+  and Claude Code version so deployment contents can be inspected without
+  entering a container.
+- README build guidance now requires deployment refs to use immutable tags or
+  full SHAs instead of mutable branch names such as `main`.
 - README agentd configuration example now uses the current `[[agents]]` schema
   with structured command argv.
 - Claude Code installation now uses a pinned Anthropic release binary verified
