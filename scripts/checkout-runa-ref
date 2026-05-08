@@ -1,0 +1,75 @@
+#!/usr/bin/env sh
+set -eu
+
+default_runa_repo="https://github.com/tesserine/runa.git"
+
+checkout_runa_ref_die() {
+    printf 'checkout-runa-ref: %s\n' "$*" >&2
+    exit 1
+}
+
+checkout_runa_ref_is_valid() {
+    checkout_runa_ref_ref="$1"
+
+    printf '%s\n' "$checkout_runa_ref_ref" \
+        | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$|^[0-9a-f]{40}$'
+}
+
+checkout_runa_ref_is_sha() {
+    checkout_runa_ref_ref="$1"
+
+    printf '%s\n' "$checkout_runa_ref_ref" | grep -Eq '^[0-9a-f]{40}$'
+}
+
+checkout_runa_ref_check() {
+    checkout_runa_ref_ref="$1"
+
+    checkout_runa_ref_is_valid "$checkout_runa_ref_ref" \
+        || checkout_runa_ref_die "RUNA_REF must be an immutable tag or full commit SHA: $checkout_runa_ref_ref"
+}
+
+checkout_runa_ref_checkout() {
+    checkout_runa_ref_ref="$1"
+    checkout_runa_ref_dest="$2"
+    checkout_runa_ref_repo="${3:-$default_runa_repo}"
+
+    checkout_runa_ref_check "$checkout_runa_ref_ref"
+
+    if checkout_runa_ref_is_sha "$checkout_runa_ref_ref"; then
+        mkdir -p "$checkout_runa_ref_dest"
+        git -C "$checkout_runa_ref_dest" init -q
+        git -C "$checkout_runa_ref_dest" remote add origin "$checkout_runa_ref_repo"
+        git -C "$checkout_runa_ref_dest" fetch --depth 1 origin "$checkout_runa_ref_ref"
+        git -C "$checkout_runa_ref_dest" checkout --detach FETCH_HEAD
+    else
+        git clone --depth 1 --branch "$checkout_runa_ref_ref" "$checkout_runa_ref_repo" "$checkout_runa_ref_dest"
+    fi
+}
+
+checkout_runa_ref_main() {
+    [ "$#" -ge 1 ] || checkout_runa_ref_die "usage: scripts/checkout-runa-ref check REF | checkout REF DEST [REPO_URL]"
+
+    case "$1" in
+        check)
+            [ "$#" -eq 2 ] || checkout_runa_ref_die "check requires exactly one REF"
+            checkout_runa_ref_check "$2"
+            ;;
+        checkout)
+            if [ "$#" -ne 3 ] && [ "$#" -ne 4 ]; then
+                checkout_runa_ref_die "checkout requires REF DEST [REPO_URL]"
+            fi
+            shift
+            checkout_runa_ref_checkout "$@"
+            ;;
+        -h|--help|help)
+            printf 'usage: scripts/checkout-runa-ref check REF | checkout REF DEST [REPO_URL]\n'
+            ;;
+        *)
+            checkout_runa_ref_die "unknown command: $1"
+            ;;
+    esac
+}
+
+if [ "${CHECKOUT_RUNA_REF_SOURCE_ONLY:-0}" != "1" ]; then
+    checkout_runa_ref_main "$@"
+fi

@@ -3,6 +3,11 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
+# shellcheck disable=SC2034
+CHECKOUT_RUNA_REF_SOURCE_ONLY=1
+# shellcheck source=./scripts/checkout-runa-ref
+source "$script_dir/checkout-runa-ref"
+unset CHECKOUT_RUNA_REF_SOURCE_ONLY
 
 usage() {
     cat <<'EOF'
@@ -29,7 +34,7 @@ check_immutable_ref_shape() {
     local name="$1"
     local value="$2"
 
-    [[ "$value" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ || "$value" =~ ^[0-9a-f]{40}$ ]] \
+    checkout_runa_ref_is_valid "$value" \
         || die "$name must be an immutable tag or full commit SHA: $value"
 }
 
@@ -110,6 +115,10 @@ check_dockerfile_identity_surface() {
         || die "Dockerfile must set org.tesserine.base.ref from BASE_REF"
     grep -Fq "org.tesserine.runa.ref=\"\${RUNA_REF}\"" "$dockerfile" \
         || die "Dockerfile must set org.tesserine.runa.ref from RUNA_REF"
+    grep -Fq 'COPY scripts/checkout-runa-ref /usr/local/bin/checkout-runa-ref' "$dockerfile" \
+        || die "Dockerfile must copy scripts/checkout-runa-ref"
+    grep -Fq "checkout-runa-ref checkout \"\${RUNA_REF}\" /build/runa" "$dockerfile" \
+        || die "Dockerfile must checkout runa with scripts/checkout-runa-ref"
 
     local runa_default
     runa_default="$(dockerfile_arg_default RUNA_REF)"
@@ -164,6 +173,8 @@ check_release_metadata_workflow_surface() {
         || die ".github/workflows/release-metadata.yml must run on pull requests"
     grep -Fq '    paths:' "$workflow" \
         || die ".github/workflows/release-metadata.yml must path-filter branch and PR checks"
+    grep -Fq '      - "scripts/checkout-runa-ref"' "$workflow" \
+        || die ".github/workflows/release-metadata.yml must run when scripts/checkout-runa-ref changes"
     grep -Fq './scripts/release-check metadata' "$workflow" \
         || die ".github/workflows/release-metadata.yml must run release-check metadata"
 }

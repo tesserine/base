@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release tooling now checks out `RUNA_REF` values through the same tag-or-SHA
+  path that the Dockerfile uses, so verifier acceptance matches build
+  capability.
+- `release-cut` now publishes the release commit and tag with an atomic push
+  and restores local state after publication failures so reruns do not require
+  manual cleanup.
 - Image builds now expose OCI and Tesserine labels for the base ref, runa ref,
   and Claude Code version so deployment contents can be inspected without
   entering a container.

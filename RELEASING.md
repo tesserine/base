@@ -65,8 +65,11 @@ For release candidates:
 
 The command verifies the clean `main` precondition, rolls `CHANGELOG.md` from
 `[Unreleased]` into `[X.Y.Z] — YYYY-MM-DD`, commits that release roll, creates
-an annotated tag, and pushes `main` plus the tag. Release candidates are
-immutable refs for deployment testing. A bad or superseded candidate is
+an annotated tag, and atomically pushes `main` plus the tag. If that
+publication push fails, the command restores the local pre-release state and
+removes the generated local tag so the release can be rerun after the cause is
+fixed. Release candidates are immutable refs for deployment testing. A bad or
+superseded candidate is
 corrected by cutting the next `rc.N`, not by rewriting the existing tag.
 
 ## Post-Release Gate

@@ -24,7 +24,8 @@ new_fixture() {
 
     mkdir -p "$root/scripts" "$root/.github/workflows"
     cp "$workspace_root/scripts/release-check" "$root/scripts/release-check"
-    chmod +x "$root/scripts/release-check"
+    cp "$workspace_root/scripts/checkout-runa-ref" "$root/scripts/checkout-runa-ref"
+    chmod +x "$root/scripts/release-check" "$root/scripts/checkout-runa-ref"
 
     cat >"$root/CHANGELOG.md" <<EOF
 # Changelog
@@ -42,6 +43,8 @@ EOF
 FROM scratch
 ARG BASE_REF=local
 ARG RUNA_REF=v0.1.2-rc.1
+COPY scripts/checkout-runa-ref /usr/local/bin/checkout-runa-ref
+RUN checkout-runa-ref checkout "${RUNA_REF}" /build/runa
 LABEL org.opencontainers.image.revision="${BASE_REF}" \
       org.tesserine.base.ref="${BASE_REF}" \
       org.tesserine.runa.ref="${RUNA_REF}"
@@ -65,10 +68,12 @@ on:
     branches: [main]
     paths:
       - "CHANGELOG.md"
+      - "scripts/checkout-runa-ref"
   pull_request:
     branches: [main]
     paths:
       - "CHANGELOG.md"
+      - "scripts/checkout-runa-ref"
 
 permissions:
   contents: read
@@ -211,6 +216,61 @@ assert_stdout() {
     fi
 }
 
+checkout_runa_ref_accepts_documented_immutable_refs() {
+    local helper="$workspace_root/scripts/checkout-runa-ref"
+
+    local accepted
+    for accepted in v0.1.2 v10.20.300 v0.1.2-rc.1 0123456789abcdef0123456789abcdef01234567; do
+        assert_success "${FUNCNAME[0]} accepts $accepted" bash "$helper" check "$accepted"
+    done
+}
+
+checkout_runa_ref_runs_under_posix_sh() {
+    local helper="$workspace_root/scripts/checkout-runa-ref"
+
+    [[ "$(head -n 1 "$helper")" == "#!/usr/bin/env sh" ]] \
+        || fail "${FUNCNAME[0]} uses /usr/bin/env sh"
+    ! grep -Eq '\[\[|BASH_SOURCE|pipefail|(^|[[:space:]])local[[:space:]]' "$helper" \
+        || fail "${FUNCNAME[0]} avoids bash-only syntax"
+}
+
+checkout_runa_ref_rejects_mutable_or_malformed_refs() {
+    local helper="$workspace_root/scripts/checkout-runa-ref"
+
+    local rejected
+    for rejected in main v0.1 v0.1.2-beta.1 0123456789abcdef0123456789abcdef0123456 0123456789ABCDEF0123456789abcdef01234567; do
+        assert_failure_contains "${FUNCNAME[0]} rejects $rejected" "immutable tag or full commit SHA" bash "$helper" check "$rejected"
+    done
+}
+
+checkout_runa_ref_resolves_tags_and_full_shas() {
+    local helper="$workspace_root/scripts/checkout-runa-ref"
+    local repo="$scratch/runa-source"
+    local tag_dest="$scratch/runa-tag"
+    local sha_dest="$scratch/runa-sha"
+
+    mkdir -p "$repo"
+    git -C "$repo" init -q
+    git -C "$repo" config user.name "base release verification"
+    git -C "$repo" config user.email "base-release-verification@example.invalid"
+    printf 'first\n' >"$repo/runa.txt"
+    git -C "$repo" add runa.txt
+    git -C "$repo" commit -q -m "initial runa"
+    git -C "$repo" tag v1.2.3
+    printf 'second\n' >"$repo/runa.txt"
+    git -C "$repo" commit -am "second runa" -q
+    local sha
+    sha="$(git -C "$repo" rev-parse HEAD)"
+
+    assert_success "${FUNCNAME[0]} tag checkout" bash "$helper" checkout v1.2.3 "$tag_dest" "$repo"
+    assert_success "${FUNCNAME[0]} sha checkout" bash "$helper" checkout "$sha" "$sha_dest" "$repo"
+
+    [[ "$(git -C "$tag_dest" rev-parse HEAD)" == "$(git -C "$repo" rev-list -n 1 v1.2.3)" ]] \
+        || fail "${FUNCNAME[0]} tag resolves to tag commit"
+    [[ "$(git -C "$sha_dest" rev-parse HEAD)" == "$sha" ]] \
+        || fail "${FUNCNAME[0]} sha resolves to sha commit"
+}
+
 metadata_accepts_a_coherent_base_release_surface() {
     local root
     root="$(new_fixture metadata-success 1.2.3)"
@@ -229,6 +289,20 @@ metadata_rejects_missing_dockerfile_identity_labels() {
     root="$(new_fixture metadata-dockerfile-label 1.2.3)"
     sed -i '/org.tesserine.base.ref/d' "$root/Dockerfile"
     assert_failure_contains "${FUNCNAME[0]}" "org.tesserine.base.ref" run_check "$root" metadata
+}
+
+metadata_accepts_sha_runa_ref_defaults_when_checkout_uses_the_shared_helper() {
+    local root
+    root="$(new_fixture metadata-sha-runa-ref 1.2.3)"
+    sed -i 's/ARG RUNA_REF=v0.1.2-rc.1/ARG RUNA_REF=0123456789abcdef0123456789abcdef01234567/' "$root/Dockerfile"
+    assert_success "${FUNCNAME[0]}" run_check "$root" metadata
+}
+
+metadata_rejects_dockerfile_runa_checkout_without_the_shared_helper() {
+    local root
+    root="$(new_fixture metadata-runa-checkout 1.2.3)"
+    sed -i '/checkout-runa-ref checkout/d' "$root/Dockerfile"
+    assert_failure_contains "${FUNCNAME[0]}" "checkout runa with scripts/checkout-runa-ref" run_check "$root" metadata
 }
 
 notes_emit_the_matching_changelog_section_without_outer_blank_lines() {
@@ -330,9 +404,15 @@ release_workflow_tag_filters_match_the_documented_release_contract() {
         || fail "${FUNCNAME[0]} no path filter"
 }
 
+checkout_runa_ref_accepts_documented_immutable_refs
+checkout_runa_ref_runs_under_posix_sh
+checkout_runa_ref_rejects_mutable_or_malformed_refs
+checkout_runa_ref_resolves_tags_and_full_shas
 metadata_accepts_a_coherent_base_release_surface
 metadata_rejects_malformed_changelog_release_headings
 metadata_rejects_missing_dockerfile_identity_labels
+metadata_accepts_sha_runa_ref_defaults_when_checkout_uses_the_shared_helper
+metadata_rejects_dockerfile_runa_checkout_without_the_shared_helper
 notes_emit_the_matching_changelog_section_without_outer_blank_lines
 notes_reject_undocumented_tag_shapes
 release_rejects_missing_matching_changelog_heading

@@ -25,8 +25,8 @@ RUN apk add --no-cache \
         rust-1.89
 
 ARG RUNA_REF=v0.1.2-rc.1
-RUN git clone --depth 1 --branch "${RUNA_REF}" \
-        https://github.com/tesserine/runa.git /build/runa \
+COPY scripts/checkout-runa-ref /usr/local/bin/checkout-runa-ref
+RUN checkout-runa-ref checkout "${RUNA_REF}" /build/runa \
     && cd /build/runa \
     && cargo build --release \
     && cp target/release/runa /build/runa-bin \
