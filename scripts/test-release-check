@@ -56,8 +56,19 @@ name: Release
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/release-check release "$GITHUB_REF_NAME"
+      - run: sudo apt-get install -y podman
+      - run: podman build .
 EOF
 
     cat >"$root/.github/workflows/release-metadata.yml" <<'EOF'
@@ -120,57 +131,6 @@ release_workflow_tag_patterns() {
             exit
         }
     ' "$workflow"
-}
-
-documented_actions_pattern_matches() {
-    local pattern="$1"
-    local candidate="$2"
-    local pattern_index=0
-    local candidate_index=0
-    local pattern_len=${#pattern}
-    local candidate_len=${#candidate}
-
-    while [[ "$pattern_index" -lt "$pattern_len" ]]; do
-        local char="${pattern:$pattern_index:1}"
-        if [[ "$char" == "[" ]]; then
-            local range="${pattern:$pattern_index:5}"
-            [[ "$range" == "[0-9]" ]] || return 1
-            local one_or_more=0
-            [[ "${pattern:$((pattern_index + 5)):1}" == "+" ]] && one_or_more=1
-
-            local start="$candidate_index"
-            while [[ "$candidate_index" -lt "$candidate_len" && "${candidate:$candidate_index:1}" =~ [0-9] ]]; do
-                candidate_index=$((candidate_index + 1))
-            done
-
-            if [[ "$one_or_more" == "1" ]]; then
-                [[ "$candidate_index" -gt "$start" ]] || return 1
-                pattern_index=$((pattern_index + 6))
-            else
-                [[ "$candidate_index" == "$((start + 1))" ]] || return 1
-                pattern_index=$((pattern_index + 5))
-            fi
-            continue
-        fi
-
-        [[ "$candidate_index" -lt "$candidate_len" ]] || return 1
-        [[ "${candidate:$candidate_index:1}" == "$char" ]] || return 1
-        pattern_index=$((pattern_index + 1))
-        candidate_index=$((candidate_index + 1))
-    done
-
-    [[ "$candidate_index" == "$candidate_len" ]]
-}
-
-matches_any_documented_actions_pattern() {
-    local candidate="$1"
-    shift
-
-    local pattern
-    for pattern in "$@"; do
-        documented_actions_pattern_matches "$pattern" "$candidate" && return 0
-    done
-    return 1
 }
 
 assert_success() {
@@ -379,29 +339,42 @@ EOF
     assert_failure_contains "${FUNCNAME[0]}" "org.tesserine.base.ref" run_check_with_runtime "$root" "$root/fake-runtime" release v1.2.3 --container-image localhost/base:v1.2.3
 }
 
-release_workflow_tag_filters_match_the_documented_release_contract() {
+release_workflow_uses_broad_tag_filter_with_early_validation() {
     local root
     root="$(new_fixture workflow-patterns 1.2.3)"
     assert_success "${FUNCNAME[0]}" run_check "$root" metadata
 
     mapfile -t patterns < <(release_workflow_tag_patterns "$root/.github/workflows/release.yml")
-    [[ "${patterns[*]}" == "v[0-9]+.[0-9]+.[0-9]+ v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+" ]] \
-        || fail "${FUNCNAME[0]} exact patterns"
-
-    local accepted
-    for accepted in v0.1.2 v10.20.300 v0.1.2-rc.1 v10.20.300-rc.400; do
-        matches_any_documented_actions_pattern "$accepted" "${patterns[@]}" \
-            || fail "${FUNCNAME[0]} accepts $accepted"
-    done
-
-    local rejected
-    for rejected in v0.1 v0.1.2.3 v0.1.2-beta.1 v0.1.2-rc v0.1.2-rc.x base-v0.1.2; do
-        ! matches_any_documented_actions_pattern "$rejected" "${patterns[@]}" \
-            || fail "${FUNCNAME[0]} rejects $rejected"
-    done
+    [[ "${patterns[*]}" == "v*" ]] \
+        || fail "${FUNCNAME[0]} broad v tag filter"
 
     ! grep -Fq 'paths:' "$root/.github/workflows/release.yml" \
         || fail "${FUNCNAME[0]} no path filter"
+}
+
+release_workflow_rejects_missing_early_validation() {
+    local root
+    root="$(new_fixture workflow-missing-validation 1.2.3)"
+    sed -i '/release-check release "\$GITHUB_REF_NAME"/d' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "validate the release tag before container setup" run_check "$root" metadata
+}
+
+release_workflow_rejects_late_validation() {
+    local root
+    root="$(new_fixture workflow-late-validation 1.2.3)"
+    sed -i '/release-check release "\$GITHUB_REF_NAME"/d' "$root/.github/workflows/release.yml"
+    sed -i '/podman build ./a\      - run: ./scripts/release-check release "$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "validate the release tag before container setup" run_check "$root" metadata
+}
+
+release_validation_rejects_malformed_broad_trigger_tags() {
+    local root
+    root="$(new_fixture release-malformed-tags 1.2.3)"
+
+    local rejected
+    for rejected in v0.1 v0.1.2-beta.1 v0.1.2-rc v0.1.2-rc.x; do
+        assert_failure_contains "${FUNCNAME[0]} rejects $rejected" "release version must look like" run_check "$root" release "$rejected"
+    done
 }
 
 checkout_runa_ref_accepts_documented_immutable_refs
@@ -419,7 +392,10 @@ release_rejects_missing_matching_changelog_heading
 release_heading_lookup_uses_literal_matching
 release_checks_container_label_identity
 release_rejects_container_label_mismatches
-release_workflow_tag_filters_match_the_documented_release_contract
+release_workflow_uses_broad_tag_filter_with_early_validation
+release_workflow_rejects_missing_early_validation
+release_workflow_rejects_late_validation
+release_validation_rejects_malformed_broad_trigger_tags
 
 if [[ "$failures" -gt 0 ]]; then
     printf '%s test(s) failed\n' "$failures" >&2

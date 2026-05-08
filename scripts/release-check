@@ -152,13 +152,17 @@ check_release_workflow_surface() {
     [[ -f "$workflow" ]] || die ".github/workflows/release.yml not found"
 
     mapfile -t patterns < <(workflow_tag_patterns)
-    [[ "${#patterns[@]}" == "2" ]] || die ".github/workflows/release.yml must declare exactly two release tag patterns"
-    [[ "${patterns[0]}" == "v[0-9]+.[0-9]+.[0-9]+" ]] \
-        || die ".github/workflows/release.yml stable tag pattern does not match the documented contract"
-    [[ "${patterns[1]}" == "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+" ]] \
-        || die ".github/workflows/release.yml RC tag pattern does not match the documented contract"
+    [[ "${#patterns[@]}" == "1" ]] || die ".github/workflows/release.yml must declare exactly one release tag pattern"
+    [[ "${patterns[0]}" == "v*" ]] \
+        || die ".github/workflows/release.yml tag pattern must delegate v-prefixed tags to release-check validation"
     ! grep -Eq '^    paths:' "$workflow" \
         || die ".github/workflows/release.yml tag publication must not use paths filters"
+
+    local validation_line container_setup_line
+    validation_line="$(awk '/^[[:space:]]*(-[[:space:]]*)?run:[[:space:]]+\.\/scripts\/release-check release "\$GITHUB_REF_NAME"[[:space:]]*$/ { print NR; exit }' "$workflow")"
+    container_setup_line="$(awk '/sudo apt-get install -y podman|podman build/ { print NR; exit }' "$workflow")"
+    [[ -n "$validation_line" ]] && [[ -n "$container_setup_line" ]] && [[ "$validation_line" -lt "$container_setup_line" ]] \
+        || die ".github/workflows/release.yml must validate the release tag before container setup"
 }
 
 check_release_metadata_workflow_surface() {
