@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Release ceremony tooling now verifies the base changelog, Dockerfile label
+  surface, tag-time image identity, and GitHub Release publication path.
+
 ### Fixed
 
 - Image builds now expose OCI and Tesserine labels for the base ref, runa ref,

@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
+
+usage() {
+    cat <<'EOF'
+usage:
+  scripts/release-check metadata
+  scripts/release-check notes vX.Y.Z[-rc.N]
+  scripts/release-check release vX.Y.Z[-rc.N] [--container-image IMAGE]
+EOF
+}
+
+die() {
+    printf 'release-check: %s\n' "$*" >&2
+    exit 1
+}
+
+release_from_tag() {
+    local tag="$1"
+    [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.[0-9]+)?$ ]] \
+        || die "release version must look like vX.Y.Z or vX.Y.Z-rc.N: $tag"
+    printf '%s.%s.%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"
+}
+
+check_immutable_ref_shape() {
+    local name="$1"
+    local value="$2"
+
+    [[ "$value" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ || "$value" =~ ^[0-9a-f]{40}$ ]] \
+        || die "$name must be an immutable tag or full commit SHA: $value"
+}
+
+check_changelog_structure() {
+    local changelog="$repo_root/CHANGELOG.md"
+    [[ -f "$changelog" ]] || die "CHANGELOG.md not found"
+
+    local unreleased_count
+    unreleased_count="$(grep -c '^## \[Unreleased\]$' "$changelog" || true)"
+    [[ "$unreleased_count" == "1" ]] \
+        || die "CHANGELOG.md must contain exactly one ## [Unreleased] heading"
+
+    awk '
+        /^## / {
+            if ($0 == "## [Unreleased]") {
+                if (seen_release) {
+                    print "CHANGELOG.md places ## [Unreleased] after a release heading" > "/dev/stderr"
+                    exit 1
+                }
+                next
+            }
+
+            if ($0 !~ /^## \[[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*(-rc\.[0-9][0-9]*)?\] — [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) {
+                print "CHANGELOG.md release heading is malformed: " $0 > "/dev/stderr"
+                exit 1
+            }
+
+            seen_release = 1
+        }
+    ' "$changelog" || exit 1
+}
+
+check_release_heading() {
+    local version="$1"
+
+    awk -v prefix="## [$version] — " -v version="$version" '
+        index($0, prefix) == 1 {
+            date = substr($0, length(prefix) + 1)
+            if (date ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) {
+                found = 1
+            }
+        }
+        END {
+            if (!found) {
+                print "release-check: CHANGELOG.md has no release heading for [" version "]" > "/dev/stderr"
+                exit 1
+            }
+        }
+    ' "$repo_root/CHANGELOG.md"
+}
+
+dockerfile_arg_default() {
+    local arg="$1"
+
+    awk -v arg="$arg" '
+        $1 == "ARG" {
+            value = $2
+            split(value, parts, "=")
+            if (parts[1] == arg) {
+                print parts[2]
+                exit
+            }
+        }
+    ' "$repo_root/Dockerfile"
+}
+
+check_dockerfile_identity_surface() {
+    local dockerfile="$repo_root/Dockerfile"
+    [[ -f "$dockerfile" ]] || die "Dockerfile not found"
+
+    grep -Eq '^ARG[[:space:]]+BASE_REF=' "$dockerfile" \
+        || die "Dockerfile must declare ARG BASE_REF"
+    grep -Eq '^ARG[[:space:]]+RUNA_REF=' "$dockerfile" \
+        || die "Dockerfile must declare ARG RUNA_REF"
+    grep -Fq "org.opencontainers.image.revision=\"\${BASE_REF}\"" "$dockerfile" \
+        || die "Dockerfile must set org.opencontainers.image.revision from BASE_REF"
+    grep -Fq "org.tesserine.base.ref=\"\${BASE_REF}\"" "$dockerfile" \
+        || die "Dockerfile must set org.tesserine.base.ref from BASE_REF"
+    grep -Fq "org.tesserine.runa.ref=\"\${RUNA_REF}\"" "$dockerfile" \
+        || die "Dockerfile must set org.tesserine.runa.ref from RUNA_REF"
+
+    local runa_default
+    runa_default="$(dockerfile_arg_default RUNA_REF)"
+    [[ -n "$runa_default" ]] || die "Dockerfile ARG RUNA_REF must have a default value"
+    check_immutable_ref_shape "Dockerfile ARG RUNA_REF" "$runa_default"
+}
+
+workflow_tag_patterns() {
+    local workflow="$repo_root/.github/workflows/release.yml"
+
+    awk '
+        $0 == "    tags:" {
+            inside = 1
+            next
+        }
+        inside && $0 ~ /^      - / {
+            value = $0
+            sub(/^      - /, "", value)
+            gsub(/"/, "", value)
+            print value
+            next
+        }
+        inside {
+            exit
+        }
+    ' "$workflow"
+}
+
+check_release_workflow_surface() {
+    local workflow="$repo_root/.github/workflows/release.yml"
+    [[ -f "$workflow" ]] || die ".github/workflows/release.yml not found"
+
+    mapfile -t patterns < <(workflow_tag_patterns)
+    [[ "${#patterns[@]}" == "2" ]] || die ".github/workflows/release.yml must declare exactly two release tag patterns"
+    [[ "${patterns[0]}" == "v[0-9]+.[0-9]+.[0-9]+" ]] \
+        || die ".github/workflows/release.yml stable tag pattern does not match the documented contract"
+    [[ "${patterns[1]}" == "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+" ]] \
+        || die ".github/workflows/release.yml RC tag pattern does not match the documented contract"
+    ! grep -Eq '^    paths:' "$workflow" \
+        || die ".github/workflows/release.yml tag publication must not use paths filters"
+}
+
+check_release_metadata_workflow_surface() {
+    local workflow="$repo_root/.github/workflows/release-metadata.yml"
+    [[ -f "$workflow" ]] || die ".github/workflows/release-metadata.yml not found"
+
+    grep -Fq 'name: Release Metadata' "$workflow" \
+        || die ".github/workflows/release-metadata.yml must be the release metadata workflow"
+    grep -Fq '    branches: [main]' "$workflow" \
+        || die ".github/workflows/release-metadata.yml must run on main"
+    grep -Fq '  pull_request:' "$workflow" \
+        || die ".github/workflows/release-metadata.yml must run on pull requests"
+    grep -Fq '    paths:' "$workflow" \
+        || die ".github/workflows/release-metadata.yml must path-filter branch and PR checks"
+    grep -Fq './scripts/release-check metadata' "$workflow" \
+        || die ".github/workflows/release-metadata.yml must run release-check metadata"
+}
+
+container_runtime() {
+    if [[ -n "${BASE_CONTAINER_RUNTIME:-}" ]]; then
+        command -v "$BASE_CONTAINER_RUNTIME" >/dev/null 2>&1 \
+            || die "configured container runtime not found: $BASE_CONTAINER_RUNTIME"
+        printf '%s\n' "$BASE_CONTAINER_RUNTIME"
+    elif command -v podman >/dev/null 2>&1; then
+        printf 'podman\n'
+    elif command -v docker >/dev/null 2>&1; then
+        printf 'docker\n'
+    else
+        die "podman or docker is required for --container-image checks"
+    fi
+}
+
+inspect_label() {
+    local runtime="$1"
+    local image="$2"
+    local label="$3"
+
+    "$runtime" inspect --format "{{ index .Config.Labels \"$label\" }}" "$image"
+}
+
+check_container_image() {
+    local tag="$1"
+    local image="$2"
+    local runtime revision base_ref runa_ref
+
+    runtime="$(container_runtime)"
+    revision="$(inspect_label "$runtime" "$image" "org.opencontainers.image.revision")"
+    base_ref="$(inspect_label "$runtime" "$image" "org.tesserine.base.ref")"
+    runa_ref="$(inspect_label "$runtime" "$image" "org.tesserine.runa.ref")"
+
+    [[ "$revision" == "$tag" ]] \
+        || die "container image label org.opencontainers.image.revision is '$revision', expected '$tag'"
+    [[ "$base_ref" == "$tag" ]] \
+        || die "container image label org.tesserine.base.ref is '$base_ref', expected '$tag'"
+    [[ -n "$runa_ref" ]] || die "container image label org.tesserine.runa.ref is missing"
+    check_immutable_ref_shape "container image label org.tesserine.runa.ref" "$runa_ref"
+}
+
+emit_notes() {
+    local version="$1"
+
+    awk -v prefix="## [$version] — " -v version="$version" '
+        index($0, prefix) == 1 {
+            found = 1
+            inside = 1
+            next
+        }
+        inside && /^## / {
+            exit
+        }
+        inside {
+            lines[++line_count] = $0
+        }
+        END {
+            if (!found) {
+                print "release-check: CHANGELOG.md has no release heading for [" version "]" > "/dev/stderr"
+                exit 1
+            }
+
+            first = 1
+            while (first <= line_count && lines[first] == "") {
+                first++
+            }
+
+            last = line_count
+            while (last >= first && lines[last] == "") {
+                last--
+            }
+
+            for (i = first; i <= last; i++) {
+                print lines[i]
+            }
+        }
+    ' "$repo_root/CHANGELOG.md"
+}
+
+run_metadata() {
+    check_changelog_structure
+    check_dockerfile_identity_surface
+    check_release_workflow_surface
+    check_release_metadata_workflow_surface
+}
+
+run_release() {
+    local tag="$1"
+    shift
+
+    local version container_image=""
+    version="$(release_from_tag "$tag")"
+
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            --container-image)
+                [[ "$#" -ge 2 ]] || die "--container-image requires an image"
+                container_image="$2"
+                shift 2
+                ;;
+            *)
+                die "unknown release option: $1"
+                ;;
+        esac
+    done
+
+    run_metadata
+    check_release_heading "$version"
+    [[ -z "$container_image" ]] || check_container_image "$tag" "$container_image"
+}
+
+main() {
+    [[ "$#" -ge 1 ]] || {
+        usage >&2
+        exit 2
+    }
+
+    case "$1" in
+        metadata)
+            [[ "$#" == 1 ]] || die "metadata takes no arguments"
+            run_metadata
+            ;;
+        notes)
+            [[ "$#" == 2 ]] || die "notes requires exactly one vX.Y.Z[-rc.N] argument"
+            emit_notes "$(release_from_tag "$2")"
+            ;;
+        release)
+            [[ "$#" -ge 2 ]] || die "release requires a vX.Y.Z[-rc.N] argument"
+            shift
+            run_release "$@"
+            ;;
+        -h|--help|help)
+            usage
+            ;;
+        *)
+            usage >&2
+            exit 2
+            ;;
+    esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

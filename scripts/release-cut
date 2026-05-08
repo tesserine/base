@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "$script_dir/.." && pwd)"
+# shellcheck source=scripts/release-check
+source "$script_dir/release-check"
+
+usage() {
+    cat <<'EOF'
+usage:
+  scripts/release-cut vX.Y.Z[-rc.N] [--remote REMOTE]
+EOF
+}
+
+ensure_clean_main() {
+    local remote="$1"
+    local branch head remote_head
+
+    branch="$(git -C "$repo_root" branch --show-current)"
+    [[ "$branch" == "main" ]] || die "release-cut must run on main, not $branch"
+
+    git -C "$repo_root" diff --quiet \
+        || die "working tree has unstaged changes"
+    git -C "$repo_root" diff --cached --quiet \
+        || die "working tree has staged changes"
+
+    git -C "$repo_root" fetch "$remote" main >/dev/null 2>&1 \
+        || die "failed to fetch $remote main"
+    head="$(git -C "$repo_root" rev-parse HEAD)"
+    remote_head="$(git -C "$repo_root" rev-parse FETCH_HEAD)"
+    [[ "$head" == "$remote_head" ]] \
+        || die "main is not up to date with $remote/main"
+}
+
+ensure_tag_available() {
+    local remote="$1"
+    local tag="$2"
+
+    ! git -C "$repo_root" rev-parse --verify --quiet "refs/tags/$tag" >/dev/null \
+        || die "tag already exists locally: $tag"
+    if git -C "$repo_root" ls-remote --exit-code --tags "$remote" "refs/tags/$tag" >/dev/null 2>&1; then
+        die "tag already exists on $remote: $tag"
+    fi
+}
+
+roll_changelog() {
+    local version="$1"
+    local date="$2"
+    local changelog="$repo_root/CHANGELOG.md"
+    local tmp
+
+    [[ -f "$changelog" ]] || die "CHANGELOG.md not found"
+    ! grep -Fq "## [$version] — " "$changelog" \
+        || die "CHANGELOG.md already has a release heading for [$version]"
+
+    tmp="$(mktemp)"
+    awk -v version="$version" -v date="$date" '
+        $0 == "## [Unreleased]" && !rolled {
+            print
+            print ""
+            print "## [" version "] — " date
+            rolled = 1
+            next
+        }
+        { print }
+        END {
+            if (!rolled) {
+                print "release-cut: CHANGELOG.md has no ## [Unreleased] heading" > "/dev/stderr"
+                exit 1
+            }
+        }
+    ' "$changelog" >"$tmp" || {
+        rm -f "$tmp"
+        exit 1
+    }
+    mv "$tmp" "$changelog"
+}
+
+run_release_cut() {
+    local tag="$1"
+    shift
+
+    local remote="origin"
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            --remote)
+                [[ "$#" -ge 2 ]] || die "--remote requires a value"
+                remote="$2"
+                shift 2
+                ;;
+            *)
+                die "unknown release-cut option: $1"
+                ;;
+        esac
+    done
+
+    local version
+    version="$(release_from_tag "$tag")"
+
+    ensure_clean_main "$remote"
+    ensure_tag_available "$remote" "$tag"
+    run_metadata
+    roll_changelog "$version" "$(date +%F)"
+    run_release "$tag"
+
+    git -C "$repo_root" add CHANGELOG.md
+    git -C "$repo_root" diff --cached --quiet \
+        && die "release-cut produced no changelog change"
+    git -C "$repo_root" commit -m "chore(release): $tag"
+    git -C "$repo_root" tag -a "$tag" -m "Release $tag"
+    git -C "$repo_root" push "$remote" HEAD:main
+    git -C "$repo_root" push "$remote" "$tag"
+}
+
+main() {
+    [[ "$#" -ge 1 ]] || {
+        usage >&2
+        exit 2
+    }
+
+    case "$1" in
+        -h|--help|help)
+            usage
+            ;;
+        *)
+            run_release_cut "$@"
+            ;;
+    esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
