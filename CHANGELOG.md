@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release tag validation now rejects leading-zero numeric identifiers so base
+  release tags match the ecosystem SemVer grammar.
 - GitHub Release publication now triggers for documented release tags and lets
   `release-check` reject malformed `v*` tags before container work begins.
 - Release tooling now checks out `RUNA_REF` values through the same tag-or-SHA

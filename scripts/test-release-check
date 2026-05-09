@@ -180,7 +180,7 @@ checkout_runa_ref_accepts_documented_immutable_refs() {
     local helper="$workspace_root/scripts/checkout-runa-ref"
 
     local accepted
-    for accepted in v0.1.2 v10.20.300 v0.1.2-rc.1 0123456789abcdef0123456789abcdef01234567; do
+    for accepted in v0.0.0 v0.1.2 v10.20.300 v0.1.2-rc.1 v1.2.3-rc.0 0123456789abcdef0123456789abcdef01234567; do
         assert_success "${FUNCNAME[0]} accepts $accepted" bash "$helper" check "$accepted"
     done
 }
@@ -198,7 +198,7 @@ checkout_runa_ref_rejects_mutable_or_malformed_refs() {
     local helper="$workspace_root/scripts/checkout-runa-ref"
 
     local rejected
-    for rejected in main v0.1 v0.1.2-beta.1 0123456789abcdef0123456789abcdef0123456 0123456789ABCDEF0123456789abcdef01234567; do
+    for rejected in main v0.1 v0.1.2-beta.1 v01.2.3 v1.02.3 v1.2.03 v1.2.3-rc.01 0123456789abcdef0123456789abcdef0123456 0123456789ABCDEF0123456789abcdef01234567; do
         assert_failure_contains "${FUNCNAME[0]} rejects $rejected" "immutable tag or full commit SHA" bash "$helper" check "$rejected"
     done
 }
@@ -244,6 +244,15 @@ metadata_rejects_malformed_changelog_release_headings() {
     assert_failure_contains "${FUNCNAME[0]}" "release heading is malformed" run_check "$root" metadata
 }
 
+metadata_rejects_changelog_release_headings_with_leading_zeroes() {
+    local version root
+
+    for version in 01.2.3 1.02.3 1.2.03 1.2.3-rc.01; do
+        root="$(new_fixture "metadata-leading-zero-$version" "$version")"
+        assert_failure_contains "${FUNCNAME[0]} rejects $version" "release heading is malformed" run_check "$root" metadata
+    done
+}
+
 metadata_rejects_missing_dockerfile_identity_labels() {
     local root
     root="$(new_fixture metadata-dockerfile-label 1.2.3)"
@@ -275,6 +284,16 @@ notes_reject_undocumented_tag_shapes() {
     local root
     root="$(new_fixture notes-beta 1.2.3)"
     assert_failure_contains "${FUNCNAME[0]}" "release version must look like" run_check "$root" notes v1.2.3-beta.1
+}
+
+release_validation_accepts_single_zero_numeric_components() {
+    local root
+
+    root="$(new_fixture release-zero-stable 0.0.0)"
+    assert_success "${FUNCNAME[0]} accepts stable zero version" run_check "$root" release v0.0.0
+
+    root="$(new_fixture release-zero-rc 1.2.3-rc.0)"
+    assert_success "${FUNCNAME[0]} accepts rc zero ordinal" run_check "$root" release v1.2.3-rc.0
 }
 
 release_rejects_missing_matching_changelog_heading() {
@@ -367,12 +386,19 @@ release_workflow_rejects_late_validation() {
     assert_failure_contains "${FUNCNAME[0]}" "validate the release tag before container setup" run_check "$root" metadata
 }
 
+release_workflow_uses_semver_rc_classifier() {
+    local workflow="$workspace_root/.github/workflows/release.yml"
+
+    grep -Fq '[[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)-rc[.](0|[1-9][0-9]*)$ ]]' "$workflow" \
+        || fail "${FUNCNAME[0]}"
+}
+
 release_validation_rejects_malformed_broad_trigger_tags() {
     local root
     root="$(new_fixture release-malformed-tags 1.2.3)"
 
     local rejected
-    for rejected in v0.1 v0.1.2-beta.1 v0.1.2-rc v0.1.2-rc.x; do
+    for rejected in v0.1 v0.1.2-beta.1 v0.1.2-rc v0.1.2-rc.x v01.2.3 v1.02.3 v1.2.03 v1.2.3-rc.01; do
         assert_failure_contains "${FUNCNAME[0]} rejects $rejected" "release version must look like" run_check "$root" release "$rejected"
     done
 }
@@ -383,11 +409,13 @@ checkout_runa_ref_rejects_mutable_or_malformed_refs
 checkout_runa_ref_resolves_tags_and_full_shas
 metadata_accepts_a_coherent_base_release_surface
 metadata_rejects_malformed_changelog_release_headings
+metadata_rejects_changelog_release_headings_with_leading_zeroes
 metadata_rejects_missing_dockerfile_identity_labels
 metadata_accepts_sha_runa_ref_defaults_when_checkout_uses_the_shared_helper
 metadata_rejects_dockerfile_runa_checkout_without_the_shared_helper
 notes_emit_the_matching_changelog_section_without_outer_blank_lines
 notes_reject_undocumented_tag_shapes
+release_validation_accepts_single_zero_numeric_components
 release_rejects_missing_matching_changelog_heading
 release_heading_lookup_uses_literal_matching
 release_checks_container_label_identity
@@ -395,6 +423,7 @@ release_rejects_container_label_mismatches
 release_workflow_uses_broad_tag_filter_with_early_validation
 release_workflow_rejects_missing_early_validation
 release_workflow_rejects_late_validation
+release_workflow_uses_semver_rc_classifier
 release_validation_rejects_malformed_broad_trigger_tags
 
 if [[ "$failures" -gt 0 ]]; then

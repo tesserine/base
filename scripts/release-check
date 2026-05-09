@@ -25,7 +25,7 @@ die() {
 
 release_from_tag() {
     local tag="$1"
-    [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.[0-9]+)?$ ]] \
+    [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?$ ]] \
         || die "release version must look like vX.Y.Z or vX.Y.Z-rc.N: $tag"
     printf '%s.%s.%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"
 }
@@ -57,7 +57,7 @@ check_changelog_structure() {
                 next
             }
 
-            if ($0 !~ /^## \[[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*(-rc\.[0-9][0-9]*)?\] — [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) {
+            if ($0 !~ /^## \[(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?\] — [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) {
                 print "CHANGELOG.md release heading is malformed: " $0 > "/dev/stderr"
                 exit 1
             }
