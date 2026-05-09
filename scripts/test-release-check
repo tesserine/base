@@ -231,6 +231,46 @@ checkout_runa_ref_resolves_tags_and_full_shas() {
         || fail "${FUNCNAME[0]} sha resolves to sha commit"
 }
 
+checkout_runa_ref_resolves_semver_refs_only_as_tags() {
+    local helper="$workspace_root/scripts/checkout-runa-ref"
+    local shadow_repo="$scratch/runa-shadow-source"
+    local shadow_dest="$scratch/runa-shadow-tag"
+    local branch_only_repo="$scratch/runa-branch-only-source"
+    local branch_only_dest="$scratch/runa-branch-only"
+
+    mkdir -p "$shadow_repo"
+    git -C "$shadow_repo" init -q
+    git -C "$shadow_repo" config user.name "base release verification"
+    git -C "$shadow_repo" config user.email "base-release-verification@example.invalid"
+    printf 'tag\n' >"$shadow_repo/runa.txt"
+    git -C "$shadow_repo" add runa.txt
+    git -C "$shadow_repo" commit -q -m "tag runa"
+    local tag_sha
+    tag_sha="$(git -C "$shadow_repo" rev-parse HEAD)"
+    git -C "$shadow_repo" tag v0.1.2
+    printf 'branch\n' >"$shadow_repo/runa.txt"
+    git -C "$shadow_repo" commit -am "branch runa" -q
+    git -C "$shadow_repo" branch v0.1.2
+
+    assert_success "${FUNCNAME[0]} prefers explicit tag ref" bash "$helper" checkout v0.1.2 "$shadow_dest" "$shadow_repo"
+    [[ "$(git -C "$shadow_dest" rev-parse HEAD)" == "$tag_sha" ]] \
+        || fail "${FUNCNAME[0]} homonymous branch does not shadow tag"
+
+    mkdir -p "$branch_only_repo"
+    git -C "$branch_only_repo" init -q
+    git -C "$branch_only_repo" config user.name "base release verification"
+    git -C "$branch_only_repo" config user.email "base-release-verification@example.invalid"
+    printf 'branch only\n' >"$branch_only_repo/runa.txt"
+    git -C "$branch_only_repo" add runa.txt
+    git -C "$branch_only_repo" commit -q -m "branch only runa"
+    git -C "$branch_only_repo" branch v0.2.3
+
+    assert_failure_contains \
+        "${FUNCNAME[0]} rejects branch-only semver ref" \
+        "RUNA_REF tag does not exist: v0.2.3" \
+        bash "$helper" checkout v0.2.3 "$branch_only_dest" "$branch_only_repo"
+}
+
 checkout_runa_ref_rejects_annotated_tag_object_shas() {
     local helper="$workspace_root/scripts/checkout-runa-ref"
     local repo="$scratch/runa-annotated-tag-source"
@@ -456,6 +496,7 @@ checkout_runa_ref_accepts_documented_immutable_refs
 checkout_runa_ref_runs_under_posix_sh
 checkout_runa_ref_rejects_mutable_or_malformed_refs
 checkout_runa_ref_resolves_tags_and_full_shas
+checkout_runa_ref_resolves_semver_refs_only_as_tags
 checkout_runa_ref_rejects_annotated_tag_object_shas
 manual_recovery_documents_rc_prerelease_creation
 metadata_accepts_a_coherent_base_release_surface

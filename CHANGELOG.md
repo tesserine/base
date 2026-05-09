@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `RUNA_REF` tag checkout now resolves SemVer-shaped values only through
+  explicit tag refs so homonymous branches cannot shadow release inputs.
 - Release tag validation now rejects leading-zero numeric identifiers so base
   release tags match the ecosystem SemVer grammar.
 - GitHub Release publication now triggers for documented release tags and lets

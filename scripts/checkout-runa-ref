@@ -63,7 +63,12 @@ checkout_runa_ref_checkout() {
         [ "$checkout_runa_ref_head" = "$checkout_runa_ref_ref" ] \
             || checkout_runa_ref_die "RUNA_REF checkout produced $checkout_runa_ref_head, expected $checkout_runa_ref_ref"
     else
-        git clone --depth 1 --branch "$checkout_runa_ref_ref" "$checkout_runa_ref_repo" "$checkout_runa_ref_dest"
+        mkdir -p "$checkout_runa_ref_dest"
+        git -C "$checkout_runa_ref_dest" init -q
+        git -C "$checkout_runa_ref_dest" remote add origin "$checkout_runa_ref_repo"
+        git -C "$checkout_runa_ref_dest" fetch --depth 1 origin "refs/tags/$checkout_runa_ref_ref:refs/tags/$checkout_runa_ref_ref" \
+            || checkout_runa_ref_die "RUNA_REF tag does not exist: $checkout_runa_ref_ref"
+        git -C "$checkout_runa_ref_dest" checkout --detach "refs/tags/$checkout_runa_ref_ref"
     fi
 }
 
