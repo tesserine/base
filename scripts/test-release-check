@@ -231,6 +231,55 @@ checkout_runa_ref_resolves_tags_and_full_shas() {
         || fail "${FUNCNAME[0]} sha resolves to sha commit"
 }
 
+checkout_runa_ref_rejects_annotated_tag_object_shas() {
+    local helper="$workspace_root/scripts/checkout-runa-ref"
+    local repo="$scratch/runa-annotated-tag-source"
+    local tag_object_dest="$scratch/runa-tag-object-sha"
+    local commit_dest="$scratch/runa-tag-target-sha"
+
+    mkdir -p "$repo"
+    git -C "$repo" init -q
+    git -C "$repo" config user.name "base release verification"
+    git -C "$repo" config user.email "base-release-verification@example.invalid"
+    printf 'annotated tag target\n' >"$repo/runa.txt"
+    git -C "$repo" add runa.txt
+    git -C "$repo" commit -q -m "annotated tag target"
+    git -C "$repo" tag -a vTEST -m test
+
+    local tag_object_sha commit_sha
+    tag_object_sha="$(git -C "$repo" rev-parse vTEST)"
+    commit_sha="$(git -C "$repo" rev-parse 'vTEST^{commit}')"
+
+    assert_failure_contains \
+        "${FUNCNAME[0]} rejects tag object sha" \
+        "resolves to a tag object, not a commit: $tag_object_sha targets $commit_sha" \
+        bash "$helper" checkout "$tag_object_sha" "$tag_object_dest" "$repo"
+    assert_success \
+        "${FUNCNAME[0]} accepts target commit sha" \
+        bash "$helper" checkout "$commit_sha" "$commit_dest" "$repo"
+}
+
+manual_recovery_documents_rc_prerelease_creation() {
+    if awk '
+        /gh release create "vX\.Y\.Z-rc\.N"/ {
+            inside = 1
+        }
+        inside && /--prerelease/ {
+            found = 1
+        }
+        inside && /^```$/ {
+            inside = 0
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    ' "$workspace_root/RELEASING.md"; then
+        pass "${FUNCNAME[0]}"
+    else
+        fail "${FUNCNAME[0]}"
+    fi
+}
+
 metadata_accepts_a_coherent_base_release_surface() {
     local root
     root="$(new_fixture metadata-success 1.2.3)"
@@ -407,6 +456,8 @@ checkout_runa_ref_accepts_documented_immutable_refs
 checkout_runa_ref_runs_under_posix_sh
 checkout_runa_ref_rejects_mutable_or_malformed_refs
 checkout_runa_ref_resolves_tags_and_full_shas
+checkout_runa_ref_rejects_annotated_tag_object_shas
+manual_recovery_documents_rc_prerelease_creation
 metadata_accepts_a_coherent_base_release_surface
 metadata_rejects_malformed_changelog_release_headings
 metadata_rejects_changelog_release_headings_with_leading_zeroes

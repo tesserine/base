@@ -85,7 +85,7 @@ publishes the GitHub Release. Only `vX.Y.Z-rc.N` tags are published as GitHub
 prereleases.
 
 Manual GitHub Release creation, when needed after a workflow failure, uses the
-same notes source:
+same notes source and release classification.
 
 ```sh
 ./scripts/release-check notes "vX.Y.Z" > /tmp/base-release-notes.md
@@ -93,6 +93,17 @@ gh release create "vX.Y.Z" \
   --title "base vX.Y.Z" \
   --notes-file /tmp/base-release-notes.md \
   --verify-tag
+```
+
+For release candidates:
+
+```sh
+./scripts/release-check notes "vX.Y.Z-rc.N" > /tmp/base-release-notes.md
+gh release create "vX.Y.Z-rc.N" \
+  --title "base vX.Y.Z-rc.N" \
+  --notes-file /tmp/base-release-notes.md \
+  --verify-tag \
+  --prerelease
 ```
 
 ## Failure Modes

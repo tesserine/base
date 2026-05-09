@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release tooling now checks out `RUNA_REF` values through the same tag-or-SHA
   path that the Dockerfile uses, so verifier acceptance matches build
   capability.
+- `RUNA_REF` SHA checkout now rejects non-commit objects so container labels
+  cannot name an annotated tag object while building the tagged commit.
+- Manual GitHub Release recovery guidance now preserves prerelease
+  classification for release candidate tags.
 - `release-cut` now publishes the release commit and tag with an atomic push
   and restores local state after publication failures so reruns do not require
   manual cleanup.

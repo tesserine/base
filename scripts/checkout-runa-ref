@@ -21,6 +21,23 @@ checkout_runa_ref_is_sha() {
     printf '%s\n' "$checkout_runa_ref_ref" | grep -Eq '^[0-9a-f]{40}$'
 }
 
+checkout_runa_ref_require_commit_object() {
+    checkout_runa_ref_ref="$1"
+    checkout_runa_ref_dest="$2"
+
+    checkout_runa_ref_object_type="$(git -C "$checkout_runa_ref_dest" cat-file -t FETCH_HEAD)"
+    if [ "$checkout_runa_ref_object_type" = "commit" ]; then
+        return 0
+    fi
+
+    checkout_runa_ref_commit="$(git -C "$checkout_runa_ref_dest" rev-parse --verify -q 'FETCH_HEAD^{commit}' || true)"
+    if [ -n "$checkout_runa_ref_commit" ]; then
+        checkout_runa_ref_die "RUNA_REF resolves to a $checkout_runa_ref_object_type object, not a commit: $checkout_runa_ref_ref targets $checkout_runa_ref_commit"
+    fi
+
+    checkout_runa_ref_die "RUNA_REF resolves to a $checkout_runa_ref_object_type object, not a commit: $checkout_runa_ref_ref"
+}
+
 checkout_runa_ref_check() {
     checkout_runa_ref_ref="$1"
 
@@ -40,7 +57,11 @@ checkout_runa_ref_checkout() {
         git -C "$checkout_runa_ref_dest" init -q
         git -C "$checkout_runa_ref_dest" remote add origin "$checkout_runa_ref_repo"
         git -C "$checkout_runa_ref_dest" fetch --depth 1 origin "$checkout_runa_ref_ref"
+        checkout_runa_ref_require_commit_object "$checkout_runa_ref_ref" "$checkout_runa_ref_dest"
         git -C "$checkout_runa_ref_dest" checkout --detach FETCH_HEAD
+        checkout_runa_ref_head="$(git -C "$checkout_runa_ref_dest" rev-parse HEAD)"
+        [ "$checkout_runa_ref_head" = "$checkout_runa_ref_ref" ] \
+            || checkout_runa_ref_die "RUNA_REF checkout produced $checkout_runa_ref_head, expected $checkout_runa_ref_ref"
     else
         git clone --depth 1 --branch "$checkout_runa_ref_ref" "$checkout_runa_ref_repo" "$checkout_runa_ref_dest"
     fi
