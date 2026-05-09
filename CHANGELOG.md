@@ -7,8 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Release ceremony tooling now verifies the base changelog, Dockerfile label
+  surface, tag-time image identity, and GitHub Release publication path.
+
 ### Fixed
 
+- `RUNA_REF` tag checkout now resolves SemVer-shaped values only through
+  explicit tag refs so homonymous branches cannot shadow release inputs.
+- Release tag validation now rejects leading-zero numeric identifiers so base
+  release tags match the ecosystem SemVer grammar.
+- GitHub Release publication now triggers for documented release tags and lets
+  `release-check` reject malformed `v*` tags before container work begins.
+- Release tooling now checks out `RUNA_REF` values through the same tag-or-SHA
+  path that the Dockerfile uses, so verifier acceptance matches build
+  capability.
+- `RUNA_REF` SHA checkout now rejects non-commit objects so container labels
+  cannot name an annotated tag object while building the tagged commit.
+- Manual GitHub Release recovery guidance now preserves prerelease
+  classification for release candidate tags.
+- `release-cut` now publishes the release commit and tag with an atomic push
+  and restores local state after publication failures so reruns do not require
+  manual cleanup.
 - Image builds now expose OCI and Tesserine labels for the base ref, runa ref,
   and Claude Code version so deployment contents can be inspected without
   entering a container.

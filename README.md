@@ -58,6 +58,10 @@ image build, and runtime contract can be verified together. The built image
 exposes `org.tesserine.base.ref`, `org.tesserine.runa.ref`, and
 `org.tesserine.claude-code.version` labels for deployment inspection.
 
+Release operation is documented in [RELEASING.md](RELEASING.md). The release
+tooling verifies the changelog, Dockerfile label surface, release workflows,
+and tag-time image identity before publishing GitHub releases.
+
 ## Using with agentd
 
 Reference this image in your agent configuration:
