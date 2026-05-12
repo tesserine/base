@@ -10,9 +10,11 @@ base uses one repository tag for the source release and container image. The
 tag is `vX.Y.Z` for stable releases and `vX.Y.Z-rc.N` for deployment release
 candidates.
 
-Release tags follow Semantic Versioning 2.0.0 numeric grammar: each integer is
-either `0` or a non-zero digit followed by zero or more digits. The
-ecosystem-wide codification is tracked in tesserine/commons#26.
+Release tags follow the ecosystem grammar codified in
+[ADR-0012](https://github.com/tesserine/commons/blob/main/adr/0012-ecosystem-release-version-grammar.md):
+stable numeric identifiers are either `0` or a non-zero digit followed by zero
+or more digits, and release-candidate ordinals are positive integers without
+leading zeroes. Release-candidate numbering starts at `rc.1`.
 
 Artifacts built from the tag must report that identity:
 

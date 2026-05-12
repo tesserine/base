@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release tag validation now rejects `rc.0` release candidates across tag,
+  changelog heading, `RUNA_REF`, and GitHub Release classification surfaces to
+  match the ADR-0012 release grammar.
 - GitHub Release publication now establishes annotated-tag and main-ancestry
   trust before running repository release code from the tagged checkout.
 - `RUNA_REF` tag checkout now resolves SemVer-shaped values only through
