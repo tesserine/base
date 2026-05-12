@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- GitHub Release publication now establishes annotated-tag and main-ancestry
+  trust before running repository release code from the tagged checkout.
 - `RUNA_REF` tag checkout now resolves SemVer-shaped values only through
   explicit tag refs so homonymous branches cannot shadow release inputs.
 - Release tag validation now rejects leading-zero numeric identifiers so base

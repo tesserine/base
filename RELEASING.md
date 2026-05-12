@@ -79,10 +79,11 @@ corrected by cutting the next `rc.N`, not by rewriting the existing tag.
 ## Post-Release Gate
 
 The tag push runs `.github/workflows/release.yml`. That workflow verifies the
-annotated tag, builds a local container image with `BASE_REF` set to the tag,
-verifies image identity, extracts release notes from `CHANGELOG.md`, and
-publishes the GitHub Release. Only `vX.Y.Z-rc.N` tags are published as GitHub
-prereleases.
+annotated tag and main-branch ancestry with git-only checks before running
+repository release code, builds a local container image with `BASE_REF` set to
+the tag, verifies image identity, extracts release notes from `CHANGELOG.md`,
+and publishes the GitHub Release. Only `vX.Y.Z-rc.N` tags are published as
+GitHub prereleases.
 
 Manual GitHub Release creation, when needed after a workflow failure, uses the
 same notes source and release classification.

@@ -66,6 +66,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag
+      - run: git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main
       - run: ./scripts/release-check release "$GITHUB_REF_NAME"
       - run: sudo apt-get install -y podman
       - run: podman build .
@@ -475,6 +477,63 @@ release_workflow_rejects_late_validation() {
     assert_failure_contains "${FUNCNAME[0]}" "validate the release tag before container setup" run_check "$root" metadata
 }
 
+release_workflow_ignores_yaml_comments_when_ordering_validation() {
+    local root
+    root="$(new_fixture workflow-yaml-comment-validation 1.2.3)"
+    sed -i '/release-check release "\$GITHUB_REF_NAME"/d' "$root/.github/workflows/release.yml"
+    sed -i '/sudo apt-get install -y podman/i\      # Note: validate via ./scripts/release-check release "$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    sed -i '/podman build ./a\      - run: ./scripts/release-check release "$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "validate the release tag before container setup" run_check "$root" metadata
+}
+
+release_workflow_ignores_inline_shell_comments_when_ordering_validation() {
+    local root
+    root="$(new_fixture workflow-inline-shell-comment-validation 1.2.3)"
+    sed -i '/release-check release "\$GITHUB_REF_NAME"/d' "$root/.github/workflows/release.yml"
+    sed -i '/sudo apt-get install -y podman/i\      - run: true  # ./scripts/release-check release "$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    sed -i '/podman build ./a\      - run: ./scripts/release-check release "$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "validate the release tag before container setup" run_check "$root" metadata
+}
+
+release_workflow_rejects_validation_before_tag_trust() {
+    local root
+    root="$(new_fixture workflow-pretrust-validation 1.2.3)"
+    sed -i '/release-check release "\$GITHUB_REF_NAME"/d' "$root/.github/workflows/release.yml"
+    sed -i '/uses: actions\/checkout@v4/a\      - run: ./scripts/release-check release "$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "establish tag trust before running repository code" run_check "$root" metadata
+}
+
+release_workflow_ignores_shell_comments_when_establishing_tag_trust() {
+    local root
+    root="$(new_fixture workflow-shell-comment-trust 1.2.3)"
+    sed -i '/git cat-file -t/d' "$root/.github/workflows/release.yml"
+    sed -i '/uses: actions\/checkout@v4/a\      - run: |\n          # git cat-file -t "refs/tags/$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "establish tag trust before running repository code" run_check "$root" metadata
+}
+
+release_workflow_ignores_inline_shell_comments_when_establishing_tag_trust() {
+    local root
+    root="$(new_fixture workflow-inline-shell-comment-trust 1.2.3)"
+    sed -i '/git cat-file -t/d' "$root/.github/workflows/release.yml"
+    sed -i '/git merge-base --is-ancestor/d' "$root/.github/workflows/release.yml"
+    sed -i '/uses: actions\/checkout@v4/a\      - run: true  # git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main' "$root/.github/workflows/release.yml"
+    sed -i '/uses: actions\/checkout@v4/a\      - run: true  # git cat-file -t "refs/tags/$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "establish tag trust before running repository code" run_check "$root" metadata
+}
+
+release_workflow_establishes_tag_trust_before_repository_code_execution() {
+    local workflow="$workspace_root/.github/workflows/release.yml"
+    local annotated_tag_line main_ancestry_line repository_code_line
+
+    annotated_tag_line="$(awk '/git cat-file -t/ { print NR; exit }' "$workflow")"
+    main_ancestry_line="$(awk '/git merge-base --is-ancestor/ { print NR; exit }' "$workflow")"
+    repository_code_line="$(awk 'index($0, "./scripts/release-check release \"$GITHUB_REF_NAME\"") || /podman build/ { print NR; exit }' "$workflow")"
+
+    [[ -n "$annotated_tag_line" ]] && [[ -n "$main_ancestry_line" ]] && [[ -n "$repository_code_line" ]] \
+        && [[ "$annotated_tag_line" -lt "$repository_code_line" ]] && [[ "$main_ancestry_line" -lt "$repository_code_line" ]] \
+        || fail "${FUNCNAME[0]}"
+}
+
 release_workflow_uses_semver_rc_classifier() {
     local workflow="$workspace_root/.github/workflows/release.yml"
 
@@ -515,6 +574,12 @@ release_rejects_container_label_mismatches
 release_workflow_uses_broad_tag_filter_with_early_validation
 release_workflow_rejects_missing_early_validation
 release_workflow_rejects_late_validation
+release_workflow_ignores_yaml_comments_when_ordering_validation
+release_workflow_ignores_inline_shell_comments_when_ordering_validation
+release_workflow_rejects_validation_before_tag_trust
+release_workflow_ignores_shell_comments_when_establishing_tag_trust
+release_workflow_ignores_inline_shell_comments_when_establishing_tag_trust
+release_workflow_establishes_tag_trust_before_repository_code_execution
 release_workflow_uses_semver_rc_classifier
 release_validation_rejects_malformed_broad_trigger_tags
 
