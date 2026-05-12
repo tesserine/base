@@ -174,7 +174,13 @@ workflow_executable_lines() {
             return value
         }
 
+        function strip_shell_comment(value) {
+            sub(/(^|[[:space:]])#.*/, "", value)
+            return value
+        }
+
         function emit(line_number, command) {
+            command = strip_shell_comment(command)
             command = trim(command)
             if (command == "" || command ~ /^#/) {
                 return
