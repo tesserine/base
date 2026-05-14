@@ -66,6 +66,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: git fetch --tags --force origin
+      - run: |
+          restored_commit=$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")
+          if [ "$restored_commit" != "$GITHUB_SHA" ]; then
+            echo "Tag $GITHUB_REF_NAME moved since trigger: expected $GITHUB_SHA, got $restored_commit" >&2
+            exit 1
+          fi
       - run: test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag
       - run: git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main
       - run: ./scripts/release-check release "$GITHUB_REF_NAME"
@@ -453,6 +460,12 @@ EOF
     assert_failure_contains "${FUNCNAME[0]}" "org.tesserine.base.ref" run_check_with_runtime "$root" "$root/fake-runtime" release v1.2.3 --container-image localhost/base:v1.2.3
 }
 
+release_rejects_empty_container_image_values() {
+    local root
+    root="$(new_fixture release-empty-container-image 1.2.3)"
+    assert_failure_contains "${FUNCNAME[0]}" "--container-image requires a non-empty image" run_check "$root" release v1.2.3 --container-image ""
+}
+
 release_workflow_uses_broad_tag_filter_with_early_validation() {
     local root
     root="$(new_fixture workflow-patterns 1.2.3)"
@@ -505,6 +518,44 @@ release_workflow_rejects_validation_before_tag_trust() {
     sed -i '/release-check release "\$GITHUB_REF_NAME"/d' "$root/.github/workflows/release.yml"
     sed -i '/uses: actions\/checkout@v4/a\      - run: ./scripts/release-check release "$GITHUB_REF_NAME"' "$root/.github/workflows/release.yml"
     assert_failure_contains "${FUNCNAME[0]}" "establish tag trust before running repository code" run_check "$root" metadata
+}
+
+release_workflow_rejects_missing_tag_ref_restore() {
+    local root
+    root="$(new_fixture workflow-missing-tag-ref-restore 1.2.3)"
+    sed -i '/git fetch --tags --force origin/d' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "restore annotated tag refs before checking tag type" run_check "$root" metadata
+}
+
+release_workflow_rejects_late_tag_ref_restore() {
+    local root
+    root="$(new_fixture workflow-late-tag-ref-restore 1.2.3)"
+    sed -i '/git fetch --tags --force origin/d' "$root/.github/workflows/release.yml"
+    sed -i '/git cat-file -t/a\      - run: git fetch --tags --force origin' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "restore annotated tag refs before checking tag type" run_check "$root" metadata
+}
+
+release_workflow_rejects_precheckout_tag_ref_restore() {
+    local root
+    root="$(new_fixture workflow-precheckout-tag-ref-restore 1.2.3)"
+    sed -i '/git fetch --tags --force origin/d' "$root/.github/workflows/release.yml"
+    sed -i '/uses: actions\/checkout@v4/i\      - run: git fetch --tags --force origin' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "restore annotated tag refs after checkout and before checking tag type" run_check "$root" metadata
+}
+
+release_workflow_rejects_missing_event_identity_verification() {
+    local root
+    root="$(new_fixture workflow-missing-event-identity 1.2.3)"
+    sed -i '/restored_commit=/,/fi/d' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "verify the restored tag matches the triggering event before checking tag type" run_check "$root" metadata
+}
+
+release_workflow_rejects_event_identity_before_tag_ref_restore() {
+    local root
+    root="$(new_fixture workflow-early-event-identity 1.2.3)"
+    sed -i '/restored_commit=/,/fi/d' "$root/.github/workflows/release.yml"
+    sed -i '/git fetch --tags --force origin/i\      - run: |\n          restored_commit=$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")\n          if [ "$restored_commit" != "$GITHUB_SHA" ]; then\n            echo "Tag $GITHUB_REF_NAME moved since trigger: expected $GITHUB_SHA, got $restored_commit" >&2\n            exit 1\n          fi' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "verify the restored tag matches the triggering event before checking tag type" run_check "$root" metadata
 }
 
 release_workflow_ignores_shell_comments_when_establishing_tag_trust() {
@@ -576,12 +627,18 @@ release_rejects_missing_matching_changelog_heading
 release_heading_lookup_uses_literal_matching
 release_checks_container_label_identity
 release_rejects_container_label_mismatches
+release_rejects_empty_container_image_values
 release_workflow_uses_broad_tag_filter_with_early_validation
 release_workflow_rejects_missing_early_validation
 release_workflow_rejects_late_validation
 release_workflow_ignores_yaml_comments_when_ordering_validation
 release_workflow_ignores_inline_shell_comments_when_ordering_validation
 release_workflow_rejects_validation_before_tag_trust
+release_workflow_rejects_missing_tag_ref_restore
+release_workflow_rejects_late_tag_ref_restore
+release_workflow_rejects_precheckout_tag_ref_restore
+release_workflow_rejects_missing_event_identity_verification
+release_workflow_rejects_event_identity_before_tag_ref_restore
 release_workflow_ignores_shell_comments_when_establishing_tag_trust
 release_workflow_ignores_inline_shell_comments_when_establishing_tag_trust
 release_workflow_establishes_tag_trust_before_repository_code_execution
