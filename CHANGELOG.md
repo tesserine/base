@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- GitHub Release publication now restores annotated tag refs after checkout and
+  verifies the restored tag still targets the triggering event commit before
+  running repository release code, addressing the cross-repo `commons#34`
+  release fix.
+- Release artifact validation now rejects an explicit empty `--container-image`
+  value instead of silently treating it as omitted.
 - Release tag validation now rejects `rc.0` release candidates across tag,
   changelog heading, `RUNA_REF`, and GitHub Release classification surfaces to
   match the ADR-0012 release grammar.
