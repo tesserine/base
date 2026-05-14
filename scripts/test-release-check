@@ -555,7 +555,15 @@ release_workflow_rejects_event_identity_before_tag_ref_restore() {
     root="$(new_fixture workflow-early-event-identity 1.2.3)"
     sed -i '/restored_commit=/,/fi/d' "$root/.github/workflows/release.yml"
     sed -i '/git fetch --tags --force origin/i\      - run: |\n          restored_commit=$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")\n          if [ "$restored_commit" != "$GITHUB_SHA" ]; then\n            echo "Tag $GITHUB_REF_NAME moved since trigger: expected $GITHUB_SHA, got $restored_commit" >&2\n            exit 1\n          fi' "$root/.github/workflows/release.yml"
-    assert_failure_contains "${FUNCNAME[0]}" "verify the restored tag matches the triggering event before checking tag type" run_check "$root" metadata
+    assert_failure_contains "${FUNCNAME[0]}" "capture the restored tag target after restoring annotated tag refs" run_check "$root" metadata
+}
+
+release_workflow_rejects_event_identity_assignment_before_tag_ref_restore() {
+    local root
+    root="$(new_fixture workflow-early-event-identity-assignment 1.2.3)"
+    sed -i '/restored_commit=$(git rev-parse/d' "$root/.github/workflows/release.yml"
+    sed -i '/git fetch --tags --force origin/i\      - run: restored_commit=$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")' "$root/.github/workflows/release.yml"
+    assert_failure_contains "${FUNCNAME[0]}" "capture the restored tag target after restoring annotated tag refs" run_check "$root" metadata
 }
 
 release_workflow_ignores_shell_comments_when_establishing_tag_trust() {
@@ -639,6 +647,7 @@ release_workflow_rejects_late_tag_ref_restore
 release_workflow_rejects_precheckout_tag_ref_restore
 release_workflow_rejects_missing_event_identity_verification
 release_workflow_rejects_event_identity_before_tag_ref_restore
+release_workflow_rejects_event_identity_assignment_before_tag_ref_restore
 release_workflow_ignores_shell_comments_when_establishing_tag_trust
 release_workflow_ignores_inline_shell_comments_when_establishing_tag_trust
 release_workflow_establishes_tag_trust_before_repository_code_execution
