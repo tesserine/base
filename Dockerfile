@@ -24,7 +24,7 @@ RUN apk add --no-cache \
         glibc-dev \
         rust-1.89
 
-ARG RUNA_REF=v0.1.2-rc.1
+ARG RUNA_REF=v0.1.2
 COPY scripts/checkout-runa-ref /usr/local/bin/checkout-runa-ref
 RUN checkout-runa-ref checkout "${RUNA_REF}" /build/runa \
     && cd /build/runa \
@@ -103,7 +103,7 @@ RUN timeout 900 sh -euxc '\
 FROM cgr.dev/chainguard/wolfi-base
 
 ARG BASE_REF=local
-ARG RUNA_REF=v0.1.2-rc.1
+ARG RUNA_REF=v0.1.2
 ARG CLAUDE_CODE_VERSION=2.1.126
 
 # agentd runner contract

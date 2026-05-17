@@ -26,6 +26,28 @@ The runa ref must be an immutable tag or full commit SHA. base verifies that
 the ref is present and immutable-shaped; ecosystem verification owns proving
 that the runa ref matches the release manifest.
 
+## Dependencies
+
+base builds its container image from the runa workspace, pinned by the
+`RUNA_REF` argument defaulted in `Dockerfile` (two `ARG RUNA_REF=` lines:
+one for the runa builder stage, one for the final image's label surface).
+The release workflow's container build step fails immediately if `RUNA_REF`
+points at a git ref that does not exist in the runa repository.
+
+Before cutting base:
+
+- Verify the current `Dockerfile` `ARG RUNA_REF=` value resolves to a
+  published runa tag. Run `git ls-remote --tags
+  https://github.com/tesserine/runa.git "refs/tags/$RUNA_REF"` (or check via
+  the [runa releases page](https://github.com/tesserine/runa/releases)).
+- If updating `RUNA_REF` as part of preparing the base cut (typically to
+  point at a newer runa release), publish the new runa tag first. Cutting
+  base before the referenced runa tag exists will fail the container build
+  step of the release workflow, leaving an orphaned base tag and no
+  published GitHub Release.
+- Update both `ARG RUNA_REF=` occurrences in `Dockerfile` together. The
+  builder-stage value and final-image label value must match.
+
 ## Pre-Release Gate
 
 A releasable commit is on `main`, up to date with `origin/main`, and has a
