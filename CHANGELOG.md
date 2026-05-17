@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release ceremony tooling now verifies the base changelog, Dockerfile label
   surface, tag-time image identity, and GitHub Release publication path.
 
+### Changed
+
+- `Dockerfile` `ARG RUNA_REF` defaults updated to `v0.1.2` (the published
+  stable runa release) on both the builder-stage and final-image label lines.
+  `README.md` build examples updated to reference current stable component
+  tags.
+- `RELEASING.md` documents the `RUNA_REF` dependency on a published runa tag,
+  with operator guidance for the cut sequence when updating `RUNA_REF`.
+
 ### Fixed
 
 - GitHub Release publication now restores annotated tag refs after checkout and

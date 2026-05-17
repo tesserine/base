@@ -34,9 +34,9 @@ The shared release-candidate convention is defined in
 
 ```bash
 podman build \
-  --build-arg BASE_REF=v0.1.2-rc.1 \
-  --build-arg RUNA_REF=v0.1.2-rc.1 \
-  -t tesserine/base:v0.1.2-rc.1 .
+  --build-arg BASE_REF=v0.1.1 \
+  --build-arg RUNA_REF=v0.1.2 \
+  -t tesserine/base:v0.1.1 .
 ```
 
 For local development, the defaults are usable, but they intentionally label
@@ -49,7 +49,7 @@ podman build -t tesserine/base:local .
 Inspect the image labels to confirm what was built:
 
 ```bash
-podman inspect tesserine/base:v0.1.2-rc.1 | jq '.[0].Config.Labels'
+podman inspect tesserine/base:v0.1.1 | jq '.[0].Config.Labels'
 ```
 
 Claude Code is intentionally pinned in the Dockerfile. Version bumps are manual
