@@ -359,6 +359,40 @@ inspect_label() {
     "$runtime" inspect --format "{{ index .Config.Labels \"$label\" }}" "$image"
 }
 
+run_container_shell() {
+    local runtime="$1"
+    local image="$2"
+    local command="$3"
+
+    "$runtime" run --rm "$image" sh -lc "$command"
+}
+
+check_container_ssh_client() {
+    local runtime="$1"
+    local image="$2"
+    local git_ssh_probe
+
+    run_container_shell "$runtime" "$image" 'command -v ssh >/dev/null && ssh -V 2>&1 | grep -Eq "^OpenSSH_"' \
+        || die "container image cannot execute ssh -V"
+
+    git_ssh_probe='
+output="$(GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=1" git ls-remote ssh://git@127.0.0.1:1/tesserine/base 2>&1)"
+status="$?"
+if [ "$status" -eq 0 ]; then
+    exit 0
+fi
+case "$output" in
+    *"cannot run ssh"*|*"No such file or directory"*|*"ssh: not found"*)
+        printf "%s\n" "$output" >&2
+        exit 1
+        ;;
+esac
+printf "%s\n" "$output" | grep -Eq "ssh: connect to host 127[.]0[.]0[.]1 port 1|Connection refused|Connection timed out|Network is unreachable|No route to host"
+'
+    run_container_shell "$runtime" "$image" "$git_ssh_probe" \
+        || die "container image cannot invoke ssh through Git SSH transport"
+}
+
 check_container_image() {
     local tag="$1"
     local image="$2"
@@ -375,6 +409,7 @@ check_container_image() {
         || die "container image label org.tesserine.base.ref is '$base_ref', expected '$tag'"
     [[ -n "$runa_ref" ]] || die "container image label org.tesserine.runa.ref is missing"
     check_immutable_ref_shape "container image label org.tesserine.runa.ref" "$runa_ref"
+    check_container_ssh_client "$runtime" "$image"
 }
 
 emit_notes() {

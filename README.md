@@ -10,8 +10,8 @@ and a working agent runtime.
 purpose-built for containers.
 
 **agentd contract:** The runner expects the image to provide `/bin/sh`, `git`,
-`useradd`, `gosu`, and `chown`. These are installed as Wolfi packages. The
-runner enters through `/bin/sh -lc` with a generated script that creates an
+`ssh`, `useradd`, `gosu`, and `chown`. These are installed as Wolfi packages.
+The runner enters through `/bin/sh -lc` with a generated script that creates an
 unprivileged user, clones the target repository, and drops privileges before
 executing the session command. The image sets no ENTRYPOINT or CMD — agentd
 owns the entrypoint.
@@ -112,9 +112,10 @@ The agentd runner makes these assumptions about the image:
 | `useradd` | Creates the unprivileged session user | `shadow` |
 | `gosu` | Drops root privileges permanently before session command | `gosu` |
 | `git` | Clones the target repository into the workspace | `git` |
+| `ssh` | Enables Git SSH clone and push transport | `openssh-client` |
 | `chown` | Transfers home directory ownership to the session user | `coreutils` |
 
-If you build a custom image, these five capabilities must be present.
+If you build a custom image, these six capabilities must be present.
 
 ## License
 

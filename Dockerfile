@@ -5,6 +5,7 @@
 #   useradd    — unprivileged user creation (from shadow)
 #   gosu       — privilege drop after setup
 #   git        — repository cloning
+#   ssh        — Git SSH clone and push transport (from openssh-client)
 #   chown      — home directory ownership (from coreutils)
 #
 # Ships with:
@@ -113,6 +114,7 @@ RUN apk add --no-cache \
         curl \
         git \
         gosu \
+        openssh-client \
         shadow
 
 # Wolfi minimal image does not include /usr/local/bin
