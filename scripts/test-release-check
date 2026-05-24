@@ -426,6 +426,9 @@ case "$1" in
       *) printf '\n' ;;
     esac
     ;;
+  run)
+    exit 0
+    ;;
   *)
     echo "unexpected fake runtime command: $*" >&2
     exit 64
@@ -434,6 +437,110 @@ esac
 EOF
     chmod +x "$root/fake-runtime"
     assert_success "${FUNCNAME[0]}" run_check_with_runtime "$root" "$root/fake-runtime" release v1.2.3 --container-image localhost/base:v1.2.3
+}
+
+release_checks_container_ssh_capability() {
+    local root
+    root="$(new_fixture release-container-ssh 1.2.3)"
+    cat >"$root/fake-runtime" <<EOF
+#!/usr/bin/env sh
+set -eu
+case "\$1" in
+  inspect)
+    case "\$3" in
+      *org.opencontainers.image.revision*) printf 'v1.2.3\n' ;;
+      *org.tesserine.base.ref*) printf 'v1.2.3\n' ;;
+      *org.tesserine.runa.ref*) printf 'v0.1.2-rc.1\n' ;;
+      *) printf '\n' ;;
+    esac
+    ;;
+  run)
+    shift
+    printf '%s\n' "\$*" >>"$root/runtime.log"
+    case "\$*" in
+      *"ssh -V"*) exit 0 ;;
+      *"git ls-remote ssh://git@127.0.0.1:1/tesserine/base"*) exit 0 ;;
+      *) echo "unexpected fake runtime run command: \$*" >&2; exit 64 ;;
+    esac
+    ;;
+  *)
+    echo "unexpected fake runtime command: \$*" >&2
+    exit 64
+    ;;
+esac
+EOF
+    chmod +x "$root/fake-runtime"
+    assert_success "${FUNCNAME[0]}" run_check_with_runtime "$root" "$root/fake-runtime" release v1.2.3 --container-image localhost/base:v1.2.3
+    grep -Fq 'ssh -V' "$root/runtime.log" \
+        || fail "${FUNCNAME[0]} runs ssh -V"
+    grep -Fq 'git ls-remote ssh://git@127.0.0.1:1/tesserine/base' "$root/runtime.log" \
+        || fail "${FUNCNAME[0]} runs Git SSH transport smoke check"
+}
+
+release_rejects_container_images_without_executable_ssh() {
+    local root
+    root="$(new_fixture release-container-no-ssh 1.2.3)"
+    cat >"$root/fake-runtime" <<'EOF'
+#!/usr/bin/env sh
+set -eu
+case "$1" in
+  inspect)
+    case "$3" in
+      *org.opencontainers.image.revision*) printf 'v1.2.3\n' ;;
+      *org.tesserine.base.ref*) printf 'v1.2.3\n' ;;
+      *org.tesserine.runa.ref*) printf 'v0.1.2-rc.1\n' ;;
+      *) printf '\n' ;;
+    esac
+    ;;
+  run)
+    shift
+    case "$*" in
+      *"ssh -V"*) exit 127 ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  *)
+    exit 64
+    ;;
+esac
+EOF
+    chmod +x "$root/fake-runtime"
+    assert_failure_contains "${FUNCNAME[0]}" "cannot execute ssh -V" run_check_with_runtime "$root" "$root/fake-runtime" release v1.2.3 --container-image localhost/base:v1.2.3
+}
+
+release_rejects_container_images_without_git_ssh_transport() {
+    local root
+    root="$(new_fixture release-container-no-git-ssh 1.2.3)"
+    cat >"$root/fake-runtime" <<'EOF'
+#!/usr/bin/env sh
+set -eu
+case "$1" in
+  inspect)
+    case "$3" in
+      *org.opencontainers.image.revision*) printf 'v1.2.3\n' ;;
+      *org.tesserine.base.ref*) printf 'v1.2.3\n' ;;
+      *org.tesserine.runa.ref*) printf 'v0.1.2-rc.1\n' ;;
+      *) printf '\n' ;;
+    esac
+    ;;
+  run)
+    shift
+    case "$*" in
+      *"ssh -V"*) exit 0 ;;
+      *"git ls-remote ssh://git@127.0.0.1:1/tesserine/base"*)
+        echo 'fatal: cannot run ssh: No such file or directory' >&2
+        exit 128
+        ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  *)
+    exit 64
+    ;;
+esac
+EOF
+    chmod +x "$root/fake-runtime"
+    assert_failure_contains "${FUNCNAME[0]}" "cannot invoke ssh through Git SSH transport" run_check_with_runtime "$root" "$root/fake-runtime" release v1.2.3 --container-image localhost/base:v1.2.3
 }
 
 release_rejects_container_label_mismatches() {
@@ -634,6 +741,9 @@ release_validation_rejects_zero_rc_ordinal
 release_rejects_missing_matching_changelog_heading
 release_heading_lookup_uses_literal_matching
 release_checks_container_label_identity
+release_checks_container_ssh_capability
+release_rejects_container_images_without_executable_ssh
+release_rejects_container_images_without_git_ssh_transport
 release_rejects_container_label_mismatches
 release_rejects_empty_container_image_values
 release_workflow_uses_broad_tag_filter_with_early_validation
