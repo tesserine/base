@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `RELEASING.md` gains Release Tooling Ownership (the per-repo ownership of
+  the structurally similar release scripts across the ecosystem, and that
+  no repo is the tooling upstream), Testing the Release Tooling
+  (`test-release-check`, `verify-release-adoption.sh` entry points), and
+  Updating the Pinned Claude Code (version bump and signing-key-fingerprint
+  rotation procedure).
+- `scripts/release-check` carries a provenance header naming the commons
+  convention as canonical and its sibling implementations as independently
+  owned.
+
+
 ### Fixed
 
 - Reference session images now include an OpenSSH client so Git SSH clone and
