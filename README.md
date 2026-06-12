@@ -1,8 +1,21 @@
 # base
 
+**The supply-chain-verified substrate agents run on.**
+
 Reference container image for [agentd](https://github.com/tesserine/agentd)
-agent sessions. Wolfi-based, minimal, ships with the agentd runner contract
-and a working agent runtime.
+agent sessions. An autonomous agent's runtime is exactly the kind of binary
+that deserves paranoia, so this image earns trust the checkable way: a
+minimal, zero-CVE-target [Wolfi](https://wolfi.dev) OS layer; the
+[runa](https://github.com/tesserine/runa) runtime built from a pinned,
+immutable source ref; and the agent runtime installed only after its release
+manifest verifies against a pinned GPG fingerprint and the binary matches the
+manifest's sha256 — a build that fails closed on any mismatch. The
+[Dockerfile](Dockerfile) documents every one of those decisions inline; it is
+the ecosystem's exemplar for self-documenting infrastructure.
+
+base is the **Run** tier's substrate in the
+[Tesserine](https://github.com/tesserine) stack (ecosystem map:
+[commons SOURCE-OF-TRUTH.md](https://github.com/tesserine/commons/blob/main/SOURCE-OF-TRUTH.md)).
 
 ## What's Inside
 

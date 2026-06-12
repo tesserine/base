@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README hero rewritten for the ecosystem README pass: leads with the
+  supply-chain verification story (Wolfi base, pinned runa ref,
+  GPG-and-checksum-verified agent runtime, fail-closed build) and base's
+  place in the Tesserine stack.
+
 ### Added
 
 - `RELEASING.md` gains Release Tooling Ownership (the per-repo ownership of
