@@ -102,6 +102,25 @@ Fork this repo and modify the Dockerfile. Common customizations:
   runtime, not baked into the image. No image change needed to switch
   methodologies.
 
+## Contributing
+
+The change loop for the image and its scripts:
+
+1. Edit `Dockerfile` (preserve its self-documenting header and per-decision
+   rationale comments — they are the contract) or the release scripts.
+2. Verify locally:
+
+   ```sh
+   podman build --tag localhost/tesserine/base:dev .
+   ./scripts/test-release-check          # release-check behavior
+   ./scripts/verify-release-adoption.sh  # end-to-end ceremony self-test
+   ```
+
+3. Record the change in `CHANGELOG.md` under `[Unreleased]`.
+
+Version pins (`RUNA_REF`, `CLAUDE_CODE_VERSION`, the signing-key
+fingerprint) have their own procedures in [RELEASING.md](RELEASING.md).
+
 ## Container Contract
 
 The agentd runner makes these assumptions about the image:
