@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`test-release-check`, `verify-release-adoption.sh` entry points), and
   Updating the Pinned Claude Code (version bump and signing-key-fingerprint
   rotation procedure).
+- README Contributing section: the image/script change loop and its local
+  verification commands.
 - `scripts/release-check` carries a provenance header naming the commons
   convention as canonical and its sibling implementations as independently
   owned.
